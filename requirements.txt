@@ -4,5 +4,5 @@ twilio
 jinja2
 python-multipart
 openai
-deepgram
+deepgram-sdk
 base64
