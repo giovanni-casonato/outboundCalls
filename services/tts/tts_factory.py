@@ -1,5 +1,7 @@
 from fastapi import WebSocket
 from .tts_provider import TTSProvider
+from services.tts.providers.tts_deepgram import DeepgramTTS
+from services.tts.providers.tts_openai import OpenaiTTS
 
 class TTSFactory:
     """
