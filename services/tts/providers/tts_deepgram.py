@@ -3,7 +3,7 @@ import base64
 import json
 import httpx
 from fastapi import WebSocket
-from services.tts.tts_provider import TTSProvider
+from tts.tts_provider import TTSProvider
 
 class DeepgramTTS(TTSProvider):
     def __init__(self, ws: WebSocket, stream_sid):
