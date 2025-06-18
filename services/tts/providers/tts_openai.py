@@ -3,7 +3,7 @@ import json
 import audioop
 from fastapi import WebSocket
 from openai import AsyncOpenAI
-from services.tts.tts_provider import TTSProvider
+from ..tts_provider import TTSProvider
 
 class OpenaiTTS(TTSProvider):
     def __init__(self, ws: WebSocket, stream_sid: str):
