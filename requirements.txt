@@ -5,3 +5,4 @@ jinja2
 python-multipart
 openai
 deepgram-sdk
+pybase64
