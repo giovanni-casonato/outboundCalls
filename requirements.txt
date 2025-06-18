@@ -2,3 +2,4 @@ fastapi
 uvicorn
 twilio
 jinja2
+python-multipart
