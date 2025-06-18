@@ -70,26 +70,41 @@ async def twilio_websocket(websocket: WebSocket):
     await websocket.accept()
 
     try:
-        while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
+        async for message in websocket.iter_text():
+            data = json.loads(message)
+            match data['event']:
+                case "start":
+                    stream_sid = data['streamSid']
+                    print(f"Call started for stream_sid: {stream_sid}")
 
-            print(f"Received: {message}")
+                    # text_to_speech = TTSFactory.create_tts_provider("deepgram", websocket, stream_sid)                    
+                    # await text_to_speech.get_b64_audio_from_text(f"Hello? How can I help you?!")
 
-            if message["event"] == "connected":
-                print("Twilio connected")
+                    # openai_assistant = ChatCompletionAssistant(phone_number, text_to_speech, from_number)
+                    # openai_assistant.init_chat_completion()
 
-            elif message["event"] == "connected":
-                print("Twilio connected")
+                    # transcriber = DeepgramTranscriber(openai_assistant, websocket, stream_sid)
+                    # await transcriber.deepgram_connect()
 
-            elif message["event"] == "start":
-                print(f"Call started: {message['start']['callSid']}")
+                case "connected":
+                    print('Websocket connected')
 
-            elif message["event"] == "media":
-                print(f"Audio data received")
-
-            elif message["event"] == "stop":
-                print("Call ended")
+                case "media":
+                    # sending audio to deepgram websocket
+                    payload_b64 = data['media']['payload']
+                    print(f"Payload: {payload_b64}")
+                    # payload_mulaw = base64.b64decode(payload_b64)
+                    # buffer.extend(payload_mulaw)
+                    # if payload_mulaw == b'':
+                    #     empty_byte_received = True
+                    # if len(buffer) >= BUFFER_SIZE or empty_byte_received:
+                    #     await transcriber.dg_connection.send(buffer)
+                    #     buffer = bytearray(b'')
+                
+                case "stop":
+                    # await transcriber.deepgram_close()
+                    # await openai_assistant.end_chat_completion()
+                    print("Stop message received")
 
     except Exception as e:
         print(f"Websocket error: {e}")
