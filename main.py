@@ -57,9 +57,9 @@ async def call_instructions():
     return Response(
         content=f'''<?xml version="1.0" encoding="UTF-8"?>
         <Response>
-            <Start>
+            <Connect>
                 <Stream url="wss://orca-app-se5sx.ondigitalocean.app/twilio"/>
-            </Start>
+            </Connect>
         </Response>''',
         media_type="application/xml"
     )
