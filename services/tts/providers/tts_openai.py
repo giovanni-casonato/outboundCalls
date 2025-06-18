@@ -5,7 +5,7 @@ from fastapi import WebSocket
 from openai import AsyncOpenAI
 from services.tts.tts_provider import TTSProvider
 
-class OpenAITTS(TTSProvider):
+class OpenaiTTS(TTSProvider):
     def __init__(self, ws: WebSocket, stream_sid: str):
         super().__init__(ws, stream_sid)
         self.client = AsyncOpenAI()
