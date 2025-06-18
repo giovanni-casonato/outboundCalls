@@ -1,9 +1,14 @@
 import os
 import json
+import base64
 from twilio.rest import Client
 from fastapi import FastAPI, Request, WebSocket, Response, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+from services.tts.tts_factory import TTSFactory
+from services.llm.openai_async import LargeLanguageModel
+from services.stt.deepgram import DeepgramTranscriber
 
 app = FastAPI()
 
@@ -20,6 +25,10 @@ TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
 
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
+# Twilio sends audio data as 160 byte messages containing 20ms of audio each
+# We buffer 5 twilio messages corresponding to 100 ms of audio
+BUFFER_SIZE = 5 * 160
+TWILIO_SAMPLE_RATE = 8000
 
 @app.get("/")
 async def get_home(request: Request):
@@ -67,7 +76,8 @@ async def call_instructions():
 @app.websocket("/twilio")
 async def twilio_websocket(websocket: WebSocket):
     await websocket.accept()
-
+    buffer = bytearray(b'')
+    empty_byte_received = False
     try:
         async for message in websocket.iter_text():
             data = json.loads(message)
@@ -76,14 +86,14 @@ async def twilio_websocket(websocket: WebSocket):
                     stream_sid = data['streamSid']
                     print(f"Call started for stream_sid: {stream_sid}")
 
-                    # text_to_speech = TTSFactory.create_tts_provider("deepgram", websocket, stream_sid)                    
-                    # await text_to_speech.get_b64_audio_from_text(f"Hello? How can I help you?!")
+                    text_to_speech = TTSFactory.create_tts_provider("deepgram", websocket, stream_sid)                    
+                    await text_to_speech.get_audio_from_text(f"Hello?!")
 
-                    # openai_assistant = ChatCompletionAssistant(phone_number, text_to_speech, from_number)
-                    # openai_assistant.init_chat_completion()
+                    openai_llm = LargeLanguageModel(text_to_speech)
+                    openai_llm.init_chat()
 
-                    # transcriber = DeepgramTranscriber(openai_assistant, websocket, stream_sid)
-                    # await transcriber.deepgram_connect()
+                    deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
+                    await deepgram_transcriber.deepgram_connect()
 
                 case "connected":
                     print('Websocket connected')
@@ -91,18 +101,16 @@ async def twilio_websocket(websocket: WebSocket):
                 case "media":
                     # sending audio to deepgram websocket
                     payload_b64 = data['media']['payload']
-                    print(f"Payload: {payload_b64}")
-                    # payload_mulaw = base64.b64decode(payload_b64)
-                    # buffer.extend(payload_mulaw)
-                    # if payload_mulaw == b'':
-                    #     empty_byte_received = True
-                    # if len(buffer) >= BUFFER_SIZE or empty_byte_received:
-                    #     await transcriber.dg_connection.send(buffer)
-                    #     buffer = bytearray(b'')
+                    payload_mulaw = base64.b64decode(payload_b64)
+                    buffer.extend(payload_mulaw)
+                    if payload_mulaw == b'':
+                        empty_byte_received = True
+                    if len(buffer) >= BUFFER_SIZE or empty_byte_received:
+                        await deepgram_transcriber.dg_connection.send(buffer)
+                        buffer = bytearray(b'')
                 
                 case "stop":
-                    # await transcriber.deepgram_close()
-                    # await openai_assistant.end_chat_completion()
+                    await deepgram_transcriber.deepgram_close()
                     print("Stop message received")
 
     except Exception as e:

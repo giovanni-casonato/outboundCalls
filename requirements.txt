@@ -3,3 +3,6 @@ uvicorn[standard]
 twilio
 jinja2
 python-multipart
+openai
+deepgram
+base64
