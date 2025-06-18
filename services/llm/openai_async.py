@@ -22,6 +22,7 @@ class LargeLanguageModel:
         )
 
         assistant_response = response.choices[0].message.content
+        print(f"Assistant: {assistant_response}")
         self.conversation.append({"role": "assistant", "content": assistant_response})
 
         await self.tts_provider.get_audio_from_text(assistant_response)
