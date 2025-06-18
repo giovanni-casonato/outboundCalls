@@ -4,7 +4,6 @@ from twilio.rest import Client
 from fastapi import FastAPI, Request, WebSocket, Response, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import logging
 
 app = FastAPI()
 

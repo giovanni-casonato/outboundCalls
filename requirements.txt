@@ -1,6 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 twilio
 jinja2
 python-multipart
-logging
