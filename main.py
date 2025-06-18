@@ -29,7 +29,7 @@ async def get_home(request: Request):
     })
 
 
-@app.post("make-call")
+@app.post("/make-call")
 async def make_call(to_number: str = Form(...)):
     try:
         call = client.calls.create(
@@ -37,7 +37,7 @@ async def make_call(to_number: str = Form(...)):
             to=to_number,
             url="https://orca-app-se5sx.ondigitalocean.app/twiml/instructions"
         )
-        
+
         return {
             "success": True,
             "call_id": call.sid,
