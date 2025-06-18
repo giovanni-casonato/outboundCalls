@@ -90,14 +90,10 @@ async def twilio_websocket(websocket: WebSocket):
                     await text_to_speech.get_audio_from_text(f"Hello?!")
 
                     openai_llm = LargeLanguageModel(text_to_speech)
-                    print("1")
                     openai_llm.init_chat()
-                    print("2")
 
                     deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
-                    print("3")
                     await deepgram_transcriber.deepgram_connect()
-                    print("4")
 
                 case "connected":
                     print('Websocket connected')

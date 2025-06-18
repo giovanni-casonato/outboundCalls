@@ -76,7 +76,7 @@ class DeepgramTranscriber:
                     # clear audio from assistant on user response
                     await ws.send_text(json.dumps({'event': 'clear', 'streamSid': f"{stream_sid}"}))
 
-                    await assistant.run_chat_completion(user_message_final)
+                    await assistant.run_chat(user_message_final)
                     transcripts.clear()
 
         async def on_utterance_end(self, utterance_end, **kwargs):
