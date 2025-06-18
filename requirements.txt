@@ -6,3 +6,4 @@ python-multipart
 openai
 deepgram-sdk
 pybase64
+audioop
