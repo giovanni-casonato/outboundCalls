@@ -4,6 +4,7 @@ from twilio.rest import Client
 from fastapi import FastAPI, Request, WebSocket, Response, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import logging
 
 app = FastAPI()
 
@@ -94,6 +95,51 @@ async def twilio_websocket(websocket: WebSocket):
 
     except Exception as e:
         print(f"Websocket error: {e}")
+
+
+@app.get("/debug/twilio")
+async def debug_twilio():
+    """Debug endpoint to check Twilio configuration"""
+    if not client:
+        return {"error": "Twilio client not initialized", "configured": False}
+    
+    try:
+        # Test account access
+        account = client.api.accounts(TWILIO_ACCOUNT_SID).fetch()
+        
+        # Get phone number details
+        phone_numbers = client.incoming_phone_numbers.list(limit=10)
+        twilio_number_info = None
+        
+        for number in phone_numbers:
+            if number.phone_number == TWILIO_PHONE_NUMBER:
+                twilio_number_info = {
+                    "phone_number": number.phone_number,
+                    "capabilities": {
+                        "voice": number.capabilities.get('voice', False),
+                        "sms": number.capabilities.get('sms', False)
+                    },
+                    "status": number.status
+                }
+                break
+        
+        return {
+            "configured": True,
+            "account_status": account.status,
+            "account_type": account.type,
+            "twilio_number": TWILIO_PHONE_NUMBER,
+            "twilio_number_info": twilio_number_info,
+            "total_phone_numbers": len(phone_numbers)
+        }
+        
+    except Exception as e:
+        logger.error(f"Twilio debug failed: {str(e)}")
+        return {
+            "error": str(e),
+            "configured": False,
+            "twilio_number": TWILIO_PHONE_NUMBER
+        }
+
 
 
 if __name__ == "__main__":
