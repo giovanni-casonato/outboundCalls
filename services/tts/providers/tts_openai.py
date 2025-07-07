@@ -62,7 +62,7 @@ class OpenaiTTS(TTSProvider):
                 voice="coral",
                 input=text,
                 instructions="Speak in a cheerful and positive tone.",
-                response_format="pcm",
+                response_format="wav",
             ) as response:
                 # Read the streaming PCM data
                 async for chunk in response.iter_bytes():
