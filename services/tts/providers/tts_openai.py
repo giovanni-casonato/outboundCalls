@@ -12,8 +12,8 @@ class OpenaiTTS(TTSProvider):
     async def get_audio_from_text(self, text: str) -> bool:
         try:
             # Buffer for accumulating chunks
+            chunk_size = 160
             buffer = bytearray()
-            buffer_size = 1280  # 80ms at 8kHz, 16-bit - adjust as needed for Twilio
 
             async with self.client.audio.speech.with_streaming_response.create(
                 model="gpt-4o-mini-tts",
@@ -23,32 +23,32 @@ class OpenaiTTS(TTSProvider):
                 response_format="pcm",
             ) as response:
                 async for chunk in response.iter_bytes():
-                    buffer.extend(chunk)
+                    # Convert PCM chunk to μ-law immediately
+                    mulaw_chunk = self._convert_pcm_to_mulaw(chunk)
+                    buffer.extend(mulaw_chunk)
                     
-                    # Process buffer when it reaches sufficient size
-                    while len(buffer) >= buffer_size:
-                        # Take a chunk from the buffer
-                        chunk_to_process = buffer[:buffer_size]
-                        buffer = buffer[buffer_size:]
+                    # Send complete chunks to maintain timing
+                    while len(buffer) >= chunk_size:
+                        # Take exactly chunk_size bytes
+                        audio_chunk = buffer[:chunk_size]
+                        buffer = buffer[chunk_size:]
                         
-                        # Convert PCM to μ-law for Twilio
-                        mulaw_chunk = self._convert_pcm_to_mulaw(chunk_to_process)
-
-                        # Encode as base64
-                        payload_b64 = base64.b64encode(mulaw_chunk).decode('utf-8')
+                        # Encode as base64 and send
+                        payload_b64 = base64.b64encode(audio_chunk).decode('utf-8')
                         
-                        # Send to Twilio
                         await self.ws.send_text(json.dumps({
                             'event': 'media', 
                             'streamSid': self.stream_sid, 
                             'media': {'payload': payload_b64}
                         }))
                 
-                # Process any remaining data in the buffer
+                # Send any remaining audio data
                 if buffer:
-                    mulaw_chunk = self._convert_pcm_to_mulaw(buffer)
-                    payload_b64 = base64.b64encode(mulaw_chunk).decode('utf-8')
+                    # Pad to chunk_size with silence if needed for consistent timing
+                    while len(buffer) < chunk_size:
+                        buffer.append(0x7F)  # μ-law silence
                     
+                    payload_b64 = base64.b64encode(buffer).decode('utf-8')
                     await self.ws.send_text(json.dumps({
                         'event': 'media', 
                         'streamSid': self.stream_sid, 
