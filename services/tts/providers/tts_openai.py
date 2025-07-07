@@ -64,17 +64,33 @@ class OpenaiTTS(TTSProvider):
     def _convert_pcm_to_mulaw(self, pcm_data: bytes) -> bytes:
         """
         Convert PCM audio data to μ-law format required by Twilio.
-        This is a placeholder - you'll need to implement the actual conversion.
+        Assumes 16-bit PCM input at 8kHz sample rate.
         """
-        import audioop
+        import numpy as np
         
         try:
-            # Convert 16-bit PCM to μ-law
-            # audioop.lin2ulaw(fragment, width) where width is bytes per sample
-            mulaw_data = audioop.lin2ulaw(pcm_data, 2)  # 2 bytes = 16-bit samples
-            return mulaw_data
-        except audioop.error as e:
-            # Handle potential audio conversion errors
+            # Convert bytes to numpy array of 16-bit signed integers
+            pcm_array = np.frombuffer(pcm_data, dtype=np.int16)
+            
+            # Convert to μ-law using the standard μ-law compression algorithm
+            # First normalize to [-1, 1] range
+            normalized = pcm_array.astype(np.float32) / 32768.0
+            
+            # Apply μ-law compression
+            mu = 255.0
+            sign = np.sign(normalized)
+            magnitude = np.abs(normalized)
+            
+            # μ-law formula: sign * log(1 + μ * |x|) / log(1 + μ)
+            compressed = sign * np.log(1 + mu * magnitude) / np.log(1 + mu)
+            
+            # Convert to 8-bit μ-law values (0-255)
+            mulaw_values = np.clip(compressed * 127 + 128, 0, 255).astype(np.uint8)
+            
+            return mulaw_values.tobytes()
+            
+        except Exception as e:
+            # Handle any conversion errors
             print(f"PCM to μ-law conversion error: {e}")
             # Return silence (μ-law 0x7F is silence)
             return b'\x7F' * (len(pcm_data) // 2)  # Half the length since μ-law is 8-bit
