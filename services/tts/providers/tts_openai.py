@@ -66,9 +66,15 @@ class OpenaiTTS(TTSProvider):
         Convert PCM audio data to μ-law format required by Twilio.
         This is a placeholder - you'll need to implement the actual conversion.
         """
-        # This is a simplified placeholder implementation
-        # You'll need to use a proper audio library like audioop or pydub
         import audioop
         
-        # Convert PCM to μ-law (assuming 16-bit PCM input)
-        return audioop.lin2ulaw(pcm_data, 2)  # 2 = 16-bit samples
+        try:
+            # Convert 16-bit PCM to μ-law
+            # audioop.lin2ulaw(fragment, width) where width is bytes per sample
+            mulaw_data = audioop.lin2ulaw(pcm_data, 2)  # 2 bytes = 16-bit samples
+            return mulaw_data
+        except audioop.error as e:
+            # Handle potential audio conversion errors
+            print(f"PCM to μ-law conversion error: {e}")
+            # Return silence (μ-law 0x7F is silence)
+            return b'\x7F' * (len(pcm_data) // 2)  # Half the length since μ-law is 8-bit
