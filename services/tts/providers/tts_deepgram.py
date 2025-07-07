@@ -9,7 +9,7 @@ class DeepgramTTS(TTSProvider):
     def __init__(self, ws: WebSocket, stream_sid):
         # initializing websocket connection
         super().__init__(ws, stream_sid)
-        self.url = "https://api.deepgram.com/v1/speak?model=aura-asteria-en"
+        self.url = "https://api.deepgram.com/v1/speak?model=aura-2-amalthea-en"
         self.api_key = os.getenv("DEEPGRAM_API_KEY")
         if not self.api_key:
             raise ValueError("Deepgram API key not found.")
