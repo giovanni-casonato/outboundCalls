@@ -1,6 +1,6 @@
 import base64
 import json
-import audioop
+import numpy as np
 from fastapi import WebSocket
 from openai import AsyncOpenAI
 from pydub import AudioSegment
@@ -41,8 +41,8 @@ class OpenaiTTS(TTSProvider):
                 # Resample to 8kHz for Twilio
                 audio_8k = audio.set_frame_rate(8000)
                 
-                # Convert to μ-law (still need audioop for this specific conversion)
-                ulaw_audio = audioop.lin2ulaw(audio_8k.raw_data, 2)
+                # Convert to μ-law
+                ulaw_audio = pcm_to_ulaw(audio_8k.raw_data)
                 
                 # Encode to base64 for Twilio
                 audio_base64 = base64.b64encode(ulaw_audio).decode('utf-8')
@@ -63,5 +63,25 @@ class OpenaiTTS(TTSProvider):
         except Exception as e:
             print(f"Error in OpenAI TTS streaming: {str(e)}")
             return False
+        
+
+def pcm_to_ulaw(pcm_data, sample_width=2):
+    """Convert PCM to μ-law using numpy"""
+    # Convert bytes to numpy array
+    if sample_width == 2:
+        audio_array = np.frombuffer(pcm_data, dtype=np.int16)
+    else:
+        audio_array = np.frombuffer(pcm_data, dtype=np.int8)
     
+    # Normalize to [-1, 1]
+    audio_float = audio_array.astype(np.float32) / 32768.0
+    
+    # Apply μ-law compression
+    mu = 255.0
+    audio_ulaw = np.sign(audio_float) * np.log(1 + mu * np.abs(audio_float)) / np.log(1 + mu)
+    
+    # Convert back to 8-bit unsigned
+    audio_ulaw_int = ((audio_ulaw + 1) * 127.5).astype(np.uint8)
+    
+    return audio_ulaw_int.tobytes()
          
