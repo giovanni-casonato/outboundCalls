@@ -30,7 +30,10 @@ class OpenaiTTS(TTSProvider):
                         # Take a chunk from the buffer
                         chunk_to_process = buffer[:buffer_size]
                         buffer = buffer[buffer_size:]
-                                                
+                        
+                        # Convert PCM to μ-law for Twilio
+                        mulaw_chunk = self._convert_pcm_to_mulaw(chunk_to_process)
+
                         # Encode as base64
                         payload_b64 = base64.b64encode(mulaw_chunk).decode('utf-8')
                         
@@ -57,3 +60,15 @@ class OpenaiTTS(TTSProvider):
         except Exception as e:
             print(f"Error in OpenAI TTS streaming: {str(e)}")
             return False
+        
+    def _convert_pcm_to_mulaw(self, pcm_data: bytes) -> bytes:
+        """
+        Convert PCM audio data to μ-law format required by Twilio.
+        This is a placeholder - you'll need to implement the actual conversion.
+        """
+        # This is a simplified placeholder implementation
+        # You'll need to use a proper audio library like audioop or pydub
+        import audioop
+        
+        # Convert PCM to μ-law (assuming 16-bit PCM input)
+        return audioop.lin2ulaw(pcm_data, 2)  # 2 = 16-bit samples
