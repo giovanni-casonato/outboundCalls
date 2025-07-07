@@ -7,3 +7,4 @@ openai
 deepgram-sdk
 pybase64
 numpy
+pydub
