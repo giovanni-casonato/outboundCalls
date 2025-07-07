@@ -11,9 +11,8 @@ class OpenaiTTS(TTSProvider):
         
     async def get_audio_from_text(self, text: str) -> bool:
         try:
-            # Buffer for accumulating chunks
-            chunk_size = 160
-            buffer = bytearray()
+            # Accumulate all PCM data first
+            pcm_buffer = bytearray()
 
             async with self.client.audio.speech.with_streaming_response.create(
                 model="gpt-4o-mini-tts",
@@ -23,44 +22,34 @@ class OpenaiTTS(TTSProvider):
                 response_format="pcm",
             ) as response:
                 async for chunk in response.iter_bytes():
-                    # Convert PCM chunk to μ-law immediately
-                    mulaw_chunk = self._convert_pcm_to_mulaw(chunk)
-                    buffer.extend(mulaw_chunk)
-                    
-                    # Send complete chunks to maintain timing
-                    while len(buffer) >= chunk_size:
-                        # Take exactly chunk_size bytes
-                        audio_chunk = buffer[:chunk_size]
-                        buffer = buffer[chunk_size:]
-                        
-                        # Encode as base64 and send
-                        payload_b64 = base64.b64encode(audio_chunk).decode('utf-8')
-                        
-                        await self.ws.send_text(json.dumps({
-                            'event': 'media', 
-                            'streamSid': self.stream_sid, 
-                            'media': {'payload': payload_b64}
-                        }))
+                    pcm_buffer.extend(chunk)
+            
+            # Convert all PCM data to μ-law at once
+            mulaw_data = self._convert_pcm_to_mulaw(bytes(pcm_buffer))
+            
+            # Send in 160-byte chunks (20ms at 8kHz μ-law)
+            chunk_size = 160
+            for i in range(0, len(mulaw_data), chunk_size):
+                audio_chunk = mulaw_data[i:i + chunk_size]
                 
-                # Send any remaining audio data
-                if buffer:
-                    # Pad to chunk_size with silence if needed for consistent timing
-                    while len(buffer) < chunk_size:
-                        buffer.append(0x7F)  # μ-law silence
-                    
-                    payload_b64 = base64.b64encode(buffer).decode('utf-8')
-                    await self.ws.send_text(json.dumps({
-                        'event': 'media', 
-                        'streamSid': self.stream_sid, 
-                        'media': {'payload': payload_b64}
-                    }))
+                # Pad last chunk if needed
+                if len(audio_chunk) < chunk_size:
+                    audio_chunk += b'\x7F' * (chunk_size - len(audio_chunk))
+                
+                payload_b64 = base64.b64encode(audio_chunk).decode('utf-8')
+                
+                await self.ws.send_text(json.dumps({
+                    'event': 'media', 
+                    'streamSid': self.stream_sid, 
+                    'media': {'payload': payload_b64}
+                }))
             
             return True
             
         except Exception as e:
             print(f"Error in OpenAI TTS streaming: {str(e)}")
             return False
-        
+    
     def _convert_pcm_to_mulaw(self, pcm_data: bytes) -> bytes:
         """
         Convert PCM audio data to μ-law format required by Twilio.
@@ -69,6 +58,11 @@ class OpenaiTTS(TTSProvider):
         import numpy as np
         
         try:
+            # Ensure we have an even number of bytes (complete 16-bit samples)
+            if len(pcm_data) % 2 != 0:
+                # Pad with a zero byte if odd length
+                pcm_data = pcm_data + b'\x00'
+            
             # Convert bytes to numpy array of 16-bit signed integers
             pcm_array = np.frombuffer(pcm_data, dtype=np.int16)
             
