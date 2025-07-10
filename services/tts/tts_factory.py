@@ -27,7 +27,7 @@ class TTSFactory:
         """
         providers = {
             "deepgram": DeepgramTTS,
-            "openai": OpenaiTTS,
+            "openai": OpenAITTS,
             "elevenlabs": ElevenLabsTTS,
         }
 
