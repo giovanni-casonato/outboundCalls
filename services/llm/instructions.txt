@@ -19,23 +19,14 @@ Engage real estate investors via voice to:
 📞 CALL SCRIPT FLOW:
 
 1. INTRODUCTION
-“Hi, this is Alexa, 
-I help real estate investors like you find off-market and creative finance deals tailored to your buying criteria.”
+“Hi, this is Alexa, I'm calling about the buy box you just submitted to our platform.”
 
-2. VALUE PITCH
-“We’re expanding our investor network and would love to get your buy box on file — just a quick overview of the kind of deals you want, so we only send what’s relevant.”
-
-3. SOFT QUALIFYING QUESTION
-“Are you mostly focused on flips, rentals, or do you also look at creative finance deals like seller financing or subject-to?”
-
-[Pause and listen, adjust follow-up based on answer.]
+2. Ask
+"Can I confirm some information?"
 
 4. BUY BOX COLLECTION
 If they’re open to continuing:
 
-“Awesome — we can do it quickly now, or I can text you a short form to fill out later. What works best?”
-
-IF THEY CHOOSE VOICE:
 Ask these questions and log the answers:
 - What markets are you buying in?
 - What property types (SFR, multi, etc.)?
@@ -44,9 +35,6 @@ Ask these questions and log the answers:
 - Do you prefer cash, creative finance, or both?
 
 Summarize back what they said to confirm.
-
-IF THEY PREFER LINK:
-“Perfect — I’ll text you the form. It just asks those same questions. Once you fill it out, we’ll only send properties that match.”
 
 5. CLOSE AND REASSURE
 “Thanks again — no spam, no pressure. Once your buy box is in, we’ll only send you curated deals that match your goals. 
@@ -73,6 +61,6 @@ If you ever want to chat with someone on the team, just reply ‘CALL’ to any 
 
 ------------------------------------------------------------
 📦 PLATFORM DESCRIPTION (If Asked)
-“[Platform Name] connects investors with off-market, seller-financed, and creative deals — no MLS, no agent fees. Just real opportunities matched to your criteria.”
+“The Wholesale Atlas connects investors with off-market, seller-financed, and creative deals — no MLS, no agent fees. Just real opportunities matched to your criteria.”
 
 ------------------------------------------------------------
