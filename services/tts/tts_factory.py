@@ -2,6 +2,7 @@ from fastapi import WebSocket
 from .tts_provider import TTSProvider
 from services.tts.providers.tts_deepgram import DeepgramTTS
 from services.tts.providers.tts_openai import OpenaiTTS
+from services.tts.providers.tts_elevenlabs import ElevenLabsTTS
 
 class TTSFactory:
     """
@@ -24,9 +25,15 @@ class TTSFactory:
         Raises:
             ValueError: If the provider name is not recognized
         """
-        if provider_name.lower() == "deepgram":
-            return DeepgramTTS(ws, stream_sid)
-        elif provider_name.lower() == "openai":
-            return OpenaiTTS(ws, stream_sid)
+        providers = {
+            "deepgram": DeepgramTTS,
+            "openai": OpenaiTTS,
+            "elevenlabs": ElevenLabsTTS,
+        }
+
+        provider_class = providers.get(provider_name.lower())
+        if provider_class:
+            return provider_class(ws, stream_sid, **kwargs)
         else:
-            raise ValueError(f"Unsupported TTS provider: {provider_name}")
+            available_providers = ", ".join(providers.keys())
+            raise ValueError(f"Unsupported TTS provider: {provider_name}. Available providers: {available_providers}")

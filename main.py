@@ -78,16 +78,18 @@ async def twilio_websocket(websocket: WebSocket):
     await websocket.accept()
     buffer = bytearray(b'')
     empty_byte_received = False
+
     try:
         async for message in websocket.iter_text():
             data = json.loads(message)
+
             match data['event']:
                 case "start":
                     stream_sid = data['streamSid']
                     print(f"Call started for stream_sid: {stream_sid}")
 
-                    text_to_speech = TTSFactory.create_tts_provider("deepgram", websocket, stream_sid)                    
-                    await text_to_speech.get_audio_from_text(f"Hello?!")
+                    text_to_speech = TTSFactory.create_tts_provider("elevenlabs", websocket, stream_sid)                    
+                    await text_to_speech.get_audio_from_text(f"Hi, this is John Doe, how does my voice sound?")
 
                     openai_llm = LargeLanguageModel(text_to_speech)
                     openai_llm.init_chat()
