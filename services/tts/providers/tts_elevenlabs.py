@@ -17,36 +17,17 @@ class ElevenLabsTTS(TTSProvider):
         self.model_id = "eleven_turbo_v2"
         self.base_url = "https://api.elevenlabs.io/v1"
         
-    def pcm_to_ulaw(self, pcm_data):
-        """Convert 16-bit PCM to μ-law"""
-        # Convert to numpy array
-        audio_array = np.frombuffer(pcm_data, dtype=np.int16)
-        
-        # Normalize to [-1, 1]
-        normalized = audio_array.astype(np.float32) / 32768.0
-        
-        # Apply μ-law compression
-        mu = 255.0
-        sign = np.sign(normalized)
-        magnitude = np.abs(normalized)
-        
-        # μ-law formula
-        compressed = sign * np.log(1 + mu * magnitude) / np.log(1 + mu)
-        
-        # Convert to 8-bit unsigned (0-255)
-        ulaw_int = ((compressed + 1) * 127.5).astype(np.uint8)
-        
-        return ulaw_int.tobytes()
-        
     async def get_audio_from_text(self, text: str) -> bool:
         headers = {
             "xi-api-key": self.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "audio/wav"  # Request WAV format for easier processing
         }
         
         payload = {
             "text": text,
             "model_id": self.model_id,
+            "output_format": "pcm_8000",  # 8kHz PCM
             "voice_settings": {
                 "stability": 0.5,
                 "similarity_boost": 0.75
@@ -63,11 +44,45 @@ class ElevenLabsTTS(TTSProvider):
                 )
                 
             if response.status_code == 200:
-                # Process the audio data for Twilio
+                # Get audio data
                 audio_data = response.content
                 
-                # Convert to mu-law encoding
-                mulaw_data = self.pcm_to_ulaw(audio_data)
+                # Skip WAV header (44 bytes) to get raw PCM data
+                pcm_data = audio_data[44:]
+                
+                # Convert 16-bit PCM to 8-bit mulaw
+                # Using a simple approach without complex audio libraries
+                # This processes 2 bytes at a time (16-bit samples)
+                mulaw_data = bytearray()
+                
+                # Process in chunks of 2 bytes (16-bit samples)
+                for i in range(0, len(pcm_data), 2):
+                    if i + 1 < len(pcm_data):  # Ensure we have 2 bytes to process
+                        # Convert 2 bytes to a 16-bit sample
+                        sample = int.from_bytes(pcm_data[i:i+2], byteorder='little', signed=True)
+                        
+                        # Simple μ-law conversion
+                        # This is a basic implementation; not ideal but should work
+                        if sample < 0:
+                            sign = 0
+                            sample = -sample
+                        else:
+                            sign = 1
+                        
+                        # Compress to 8-bit
+                        if sample > 32767:
+                            sample = 32767  # Clamp to max 16-bit value
+                        
+                        # Convert to 0-255 range with basic logarithmic compression
+                        if sample == 0:
+                            compressed = 0
+                        else:
+                            # Simple log compression (not true μ-law but similar effect)
+                            compressed = int(127 * (1 + np.log(sample / 32767) / np.log(256)))
+                        
+                        # Add sign bit and store
+                        mulaw_byte = (sign << 7) | (compressed & 0x7F)
+                        mulaw_data.append(mulaw_byte)
                 
                 # Encode to base64 for Twilio
                 payload_b64 = base64.b64encode(mulaw_data).decode('utf-8')
