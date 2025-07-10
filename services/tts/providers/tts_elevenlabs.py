@@ -66,24 +66,11 @@ class ElevenLabsTTS(TTSProvider):
                 # Process the audio data for Twilio
                 audio_data = response.content
                 
-                # ElevenLabs returns MP3, convert to PCM using pydub
-                from io import BytesIO
-                from pydub import AudioSegment
-                
-                # Load MP3 data
-                audio_segment = AudioSegment.from_mp3(BytesIO(audio_data))
-                
-                # Convert to mono, 8kHz wav for Twilio
-                audio_segment = audio_segment.set_channels(1).set_frame_rate(8000)
-                
-                # Extract raw PCM data
-                pcm_data = audio_segment.raw_data
-                
-                # Convert to μ-law
-                ulaw_data = self.pcm_to_ulaw(pcm_data)
+                # Convert to mu-law encoding
+                mulaw_data = self.convert_to_mulaw(audio_data)
                 
                 # Encode to base64 for Twilio
-                payload_b64 = base64.b64encode(ulaw_data).decode('utf-8')
+                payload_b64 = base64.b64encode(mulaw_data).decode('utf-8')
                 
                 # Send to Twilio WebSocket
                 await self.ws.send_text(json.dumps({
