@@ -1,13 +1,13 @@
-# services/tts/providers/tts_openai.py
 import os
-import json
-import base64
 import io
+import base64
+import json
+import numpy as np
+from scipy.io import wavfile
 from fastapi import WebSocket
 from ..tts_provider import TTSProvider
 from openai import OpenAI
-from pydub import AudioSegment
-from pydub.utils import make_chunks
+from scipy.signal import resample
 
 class OpenAITTS(TTSProvider):
     def __init__(self, ws: WebSocket, stream_sid):
@@ -16,35 +16,6 @@ class OpenAITTS(TTSProvider):
         if not self.api_key:
             raise ValueError("OpenAI API key not found.")
         self.client = OpenAI(api_key=self.api_key)
-        
-    def convert_to_mulaw_8khz(self, audio_data: bytes, input_format: str = "wav") -> bytes:
-        """
-        Convert audio data to μ-law 8kHz format for Twilio using pydub
-        """
-        try:
-            # Load audio with pydub
-            audio = AudioSegment.from_file(io.BytesIO(audio_data), format=input_format)
-            
-            # Convert to mono and 8kHz
-            audio = audio.set_channels(1)  # Convert to mono
-            audio = audio.set_frame_rate(8000)  # Set to 8kHz
-            audio = audio.set_sample_width(2)  # Set to 16-bit
-            
-            # Export as μ-law encoded audio
-            output_buffer = io.BytesIO()
-            
-            # Export as raw μ-law data (no WAV header)
-            audio.export(output_buffer, format="raw", codec="pcm_mulaw")
-            
-            # Get the raw μ-law data
-            output_buffer.seek(0)
-            mulaw_data = output_buffer.read()
-            
-            return mulaw_data
-                    
-        except Exception as e:
-            print(f"Error converting audio to μ-law: {str(e)}")
-            raise
     
     async def get_audio_from_text(self, text: str) -> bool:
         try:
@@ -84,3 +55,67 @@ class OpenAITTS(TTSProvider):
         except Exception as e:
             print(f"Error in OpenAI TTS: {str(e)}")
             return False
+        
+    def linear_to_mulaw(self, linear_sample):
+        '''Convert a 16-bit linear PCM sample to μ-law'''
+        BIAS = 0x84
+        CLIP = 32635
+        
+        if linear_sample < 0:
+            linear_sample = -linear_sample
+            sign = 0x80
+        else:
+            sign = 0x00
+            
+        if linear_sample > CLIP:
+            linear_sample = CLIP
+            
+        linear_sample += BIAS
+        
+        exponent = 7
+        for i in range(7):
+            if linear_sample <= (0x1F << (exponent + 2)):
+                break
+            exponent -= 1
+            
+        mantissa = (linear_sample >> (exponent + 3)) & 0x0F
+        mulaw_sample = ~(sign | (exponent << 4) | mantissa)
+        
+        return mulaw_sample & 0xFF
+        
+    def convert_to_mulaw_8khz(self, audio_data: bytes, input_format: str = "wav") -> bytes:
+        '''
+        Convert audio data to μ-law 8kHz format using numpy/scipy
+        '''
+        try:
+            # Read WAV data using scipy
+            sample_rate, audio_array = wavfile.read(io.BytesIO(audio_data))
+            
+            # Convert to float for processing
+            if audio_array.dtype == np.int16:
+                audio_array = audio_array.astype(np.float32) / 32768.0
+            elif audio_array.dtype == np.int32:
+                audio_array = audio_array.astype(np.float32) / 2147483648.0
+            elif audio_array.dtype == np.uint8:
+                audio_array = (audio_array.astype(np.float32) - 128) / 128.0
+            
+            # Convert stereo to mono
+            if audio_array.ndim == 2:
+                audio_array = np.mean(audio_array, axis=1)
+            
+            # Resample to 8kHz if needed
+            if sample_rate != 8000:
+                num_samples = int(len(audio_array) * 8000 / sample_rate)
+                audio_array = resample(audio_array, num_samples)
+            
+            # Convert back to 16-bit integers
+            audio_array = np.clip(audio_array * 32767, -32768, 32767).astype(np.int16)
+            
+            # Convert to μ-law
+            mulaw_data = bytes([self.linear_to_mulaw(sample) for sample in audio_array])
+            
+            return mulaw_data
+            
+        except Exception as e:
+            print(f"Error converting audio with numpy: {str(e)}")
+            raise

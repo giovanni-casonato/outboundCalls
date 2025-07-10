@@ -8,4 +8,4 @@ deepgram-sdk
 pybase64
 numpy
 elevenlabs
-pydub
+scipy
