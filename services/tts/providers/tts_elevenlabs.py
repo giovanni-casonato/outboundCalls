@@ -67,7 +67,7 @@ class ElevenLabsTTS(TTSProvider):
                 audio_data = response.content
                 
                 # Convert to mu-law encoding
-                mulaw_data = self.convert_to_mulaw(audio_data)
+                mulaw_data = self.pcm_to_ulaw(audio_data)
                 
                 # Encode to base64 for Twilio
                 payload_b64 = base64.b64encode(mulaw_data).decode('utf-8')
