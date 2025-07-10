@@ -14,7 +14,7 @@ class ElevenLabsTTS(TTSProvider):
         if not self.api_key:
             raise ValueError("ElevenLabs API key not found.")
         self.voice_id = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Default voice: Rachel
-        self.model_id = "eleven_turbo_v2"
+        self.model_id = "eleven_turbo_v3"
         self.base_url = "https://api.elevenlabs.io/v1"
         
     async def get_audio_from_text(self, text: str) -> bool:
@@ -27,7 +27,7 @@ class ElevenLabsTTS(TTSProvider):
         payload = {
             "text": text,
             "model_id": self.model_id,
-            "output_format": "pcm_8000",  # 8kHz PCM
+            "output_format": "ulaw8000",
             "voice_settings": {
                 "stability": 0.5,
                 "similarity_boost": 0.75
