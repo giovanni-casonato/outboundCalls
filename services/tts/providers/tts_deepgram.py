@@ -1,40 +1,48 @@
 import os
 import base64
 import json
-import httpx
 from fastapi import WebSocket
+from deepgram import DeepgramClient, SpeakOptions
 from ..tts_provider import TTSProvider
 
 class DeepgramTTS(TTSProvider):
     def __init__(self, ws: WebSocket, stream_sid):
-        # initializing websocket connection
         super().__init__(ws, stream_sid)
-        self.url = "https://api.deepgram.com/v1/speak?model=aura-2-amalthea-en"
         self.api_key = os.getenv("DEEPGRAM_API_KEY")
         if not self.api_key:
             raise ValueError("Deepgram API key not found.")
-        self.headers = {
-            "Authorization": f"Token {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        
+        self.deepgram = DeepgramClient(self.api_key)
 
-    async def get_audio_from_text(self, text):
-        payload = {"text": text}
-        async with httpx.AsyncClient() as client:
-            response = await client.post(self.url, headers=self.headers, json=payload, params={"encoding": "mulaw"})
-
-        if response.status_code == 200:
-            audio_data = response.content
-            audio_data = audio_data[400:]
-            payload_b64 = base64.b64encode(audio_data).decode('utf-8')
-    
-            # sending tts audio back to twilio
-            await self.ws.send_text(json.dumps({
-                'event': 'media',
-                'streamSid': f"{self.stream_sid}",
-                'media': {'payload': payload_b64}
-                }))  
+    async def get_audio_from_text(self, text: str) -> bool:
+        try:
+            options = SpeakOptions(
+                model="aura-2-amalthea-en",
+                encoding="mulaw",
+                sample_rate=8000
+            )
+            
+            # Get audio stream directly
+            audio_stream = self.deepgram.speak.rest.v("1").stream(
+                {"text": text}, 
+                options
+            )
+            
+            # Process audio chunks
+            for chunk in audio_stream:
+                if chunk:
+                    # Encode to base64 for Twilio
+                    payload_b64 = base64.b64encode(chunk).decode('utf-8')
+                    
+                    # Send to Twilio WebSocket
+                    await self.ws.send_text(json.dumps({
+                        'event': 'media',
+                        'streamSid': self.stream_sid,
+                        'media': {'payload': payload_b64}
+                    }))
+            
             return True
-        else:
-            print(f"Error: {response.status_code} - {response.text}")
+                    
+        except Exception as e:
+            print(f"Error in Deepgram TTS: {str(e)}")
             return False
