@@ -20,7 +20,7 @@ class ElevenLabsTTS(TTSProvider):
             audio_stream = self.client.text_to_speech.stream(
                 text=text,
                 voice_id="21m00Tcm4TlvDq8ikWAM",
-                model_id="eleven_multilingual_v2",
+                model_id="eleven_turbo_v2_5",
                 output_format="ulaw_8000"  # Request μ-law 8kHz directly
             )
             
