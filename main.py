@@ -88,8 +88,8 @@ async def twilio_websocket(websocket: WebSocket):
                     stream_sid = data['streamSid']
                     print(f"Call started for stream_sid: {stream_sid}")
 
-                    text_to_speech = TTSFactory.create_tts_provider("openai", websocket, stream_sid)                    
-                    await text_to_speech.get_audio_from_text(f"Hi, this is John Doe, how does my voice sound?")
+                    text_to_speech = TTSFactory.create_tts_provider("elevenlabs", websocket, stream_sid)                    
+                    await text_to_speech.get_audio_from_text(f"Hello, is this James?")
 
                     openai_llm = LargeLanguageModel(text_to_speech)
                     openai_llm.init_chat()
