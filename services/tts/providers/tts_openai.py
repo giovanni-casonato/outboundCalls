@@ -31,27 +31,6 @@ class OpenaiTTS(TTSProvider):
         
         return resampled.astype(np.int16).tobytes()
     
-    def pcm_to_ulaw(self, pcm_data):
-        """Convert 16-bit PCM to μ-law"""
-        # Convert to numpy array
-        audio_array = np.frombuffer(pcm_data, dtype=np.int16)
-        
-        # Normalize to [-1, 1]
-        normalized = audio_array.astype(np.float32) / 32768.0
-        
-        # Apply μ-law compression
-        mu = 255.0
-        sign = np.sign(normalized)
-        magnitude = np.abs(normalized)
-        
-        # μ-law formula
-        compressed = sign * np.log(1 + mu * magnitude) / np.log(1 + mu)
-        
-        # Convert to 8-bit unsigned (0-255)
-        ulaw_int = ((compressed + 1) * 127.5).astype(np.uint8)
-        
-        return ulaw_int.tobytes()
-    
     async def get_audio_from_text(self, text: str) -> bool:
         try:
             # Accumulate all PCM data first
