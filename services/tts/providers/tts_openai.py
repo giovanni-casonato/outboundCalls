@@ -1,79 +1,86 @@
-import base64
+# services/tts/providers/tts_openai.py
+import os
 import json
-import numpy as np
+import base64
+import io
 from fastapi import WebSocket
-from openai import AsyncOpenAI
 from ..tts_provider import TTSProvider
+from openai import OpenAI
+from pydub import AudioSegment
+from pydub.utils import make_chunks
 
-class OpenaiTTS(TTSProvider):
-    def __init__(self, ws: WebSocket, stream_sid: str):
+class OpenAITTS(TTSProvider):
+    def __init__(self, ws: WebSocket, stream_sid):
         super().__init__(ws, stream_sid)
-        self.client = AsyncOpenAI()
-    
-    def resample_audio(self, audio_data, original_rate, target_rate):
-        """Simple resampling using numpy"""
-        # Convert bytes to numpy array (16-bit PCM)
-        audio_array = np.frombuffer(audio_data, dtype=np.int16)
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OpenAI API key not found.")
+        self.client = OpenAI(api_key=self.api_key)
         
-        # Calculate resampling ratio
-        ratio = target_rate / original_rate
-        
-        # Simple linear interpolation resampling
-        original_length = len(audio_array)
-        target_length = int(original_length * ratio)
-        
-        # Create new indices for interpolation
-        original_indices = np.arange(original_length)
-        target_indices = np.linspace(0, original_length - 1, target_length)
-        
-        # Interpolate
-        resampled = np.interp(target_indices, original_indices, audio_array)
-        
-        return resampled.astype(np.int16).tobytes()
+    def convert_to_mulaw_8khz(self, audio_data: bytes, input_format: str = "wav") -> bytes:
+        """
+        Convert audio data to μ-law 8kHz format for Twilio using pydub
+        """
+        try:
+            # Load audio with pydub
+            audio = AudioSegment.from_file(io.BytesIO(audio_data), format=input_format)
+            
+            # Convert to mono and 8kHz
+            audio = audio.set_channels(1)  # Convert to mono
+            audio = audio.set_frame_rate(8000)  # Set to 8kHz
+            audio = audio.set_sample_width(2)  # Set to 16-bit
+            
+            # Export as μ-law encoded audio
+            output_buffer = io.BytesIO()
+            
+            # Export as raw μ-law data (no WAV header)
+            audio.export(output_buffer, format="raw", codec="pcm_mulaw")
+            
+            # Get the raw μ-law data
+            output_buffer.seek(0)
+            mulaw_data = output_buffer.read()
+            
+            return mulaw_data
+                    
+        except Exception as e:
+            print(f"Error converting audio to μ-law: {str(e)}")
+            raise
     
     async def get_audio_from_text(self, text: str) -> bool:
         try:
-            # Accumulate all PCM data first
-            pcm_buffer = bytearray()
-
-            async with self.client.audio.speech.with_streaming_response.create(
-                model="gpt-4o-mini-tts",
-                voice="coral",
+            # Generate audio using OpenAI TTS
+            response = self.client.audio.speech.create(
+                model="tts-1",  # or "tts-1-hd" for higher quality
+                voice="alloy",  # or "echo", "fable", "onyx", "nova", "shimmer"
                 input=text,
-                instructions="Speak in a cheerful and positive tone.",
-                response_format="wav",
-            ) as response:
-                # Read the streaming PCM data
-                async for chunk in response.iter_bytes():
-                    if chunk:
-                        pcm_buffer.extend(chunk)
+                response_format="wav"  # Get WAV format for easier conversion
+            )
             
-            # Convert PCM to Twilio's required format
-            if pcm_buffer:
-                # Resample from 24kHz to 8kHz
-                resampled_audio = self.resample_audio(
-                    bytes(pcm_buffer), 24000, 8000
-                )
+            # Get the audio data
+            audio_data = response.content
+            
+            # Convert to μ-law 8kHz
+            mulaw_data = self.convert_to_mulaw_8khz(audio_data, "wav")
+            
+            # For streaming, we need to chunk the data
+            # Twilio typically expects chunks of about 160 bytes for μ-law at 8kHz
+            chunk_size = 160
+            
+            for i in range(0, len(mulaw_data), chunk_size):
+                chunk = mulaw_data[i:i + chunk_size]
                 
-                # Convert to μ-law
-                ulaw_audio = self.pcm_to_ulaw(resampled_audio)
+                # Encode chunk to base64
+                payload_b64 = base64.b64encode(chunk).decode('utf-8')
                 
-                # Encode to base64 for Twilio
-                audio_base64 = base64.b64encode(ulaw_audio).decode('utf-8')
-                
-                # Send to Twilio WebSocket
-                media_message = {
-                    "event": "media",
-                    "streamSid": self.stream_sid,
-                    "media": {
-                        "payload": audio_base64
-                    }
-                }
-                
-                await self.ws.send_text(json.dumps(media_message))
-                
+                # Send chunk to Twilio WebSocket
+                await self.ws.send_text(json.dumps({
+                    'event': 'media',
+                    'streamSid': f"{self.stream_sid}",
+                    'media': {'payload': payload_b64}
+                }))
+            
             return True
-
+                
         except Exception as e:
-            print(f"Error in OpenAI TTS streaming: {str(e)}")
+            print(f"Error in OpenAI TTS: {str(e)}")
             return False
