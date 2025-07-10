@@ -24,18 +24,22 @@ class ElevenLabsTTS(TTSProvider):
                 output_format="ulaw_8000"  # Request μ-law 8kHz directly
             )
             
-            # Encode to base64 for Twilio
-            payload_b64 = base64.b64encode(audio_stream).decode('utf-8')
-            
-            # Send to Twilio WebSocket
-            await self.ws.send_text(json.dumps({
-                'event': 'media',
-                'streamSid': f"{self.stream_sid}",
-                'media': {'payload': payload_b64}
-            }))
-            
+            for chunk in audio_stream:
+                if isinstance(chunk, bytes):
+                    # Encode to base64 for Twilio
+                    payload_b64 = base64.b64encode(chunk).decode('utf-8')
+                    
+                    # Send to Twilio WebSocket
+                    await self.ws.send_text(json.dumps({
+                        'event': 'media',
+                        'streamSid': f"{self.stream_sid}",
+                        'media': {'payload': payload_b64}
+                    }))
+                else:
+                    print(f"Unexpected chunk type: {type(chunk)}")
+                    
             return True
                 
         except Exception as e:
-            print(f"Error in ElevenLabs TTS: {str(e)}")
-            return False
+            # Encode to base64 for Twilio
+            payload_b64 = base64.b64encode(audio_stream).decode('utf-8')
