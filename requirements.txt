@@ -9,4 +9,4 @@ pybase64
 numpy
 elevenlabs
 scipy
-pydub
+audioop-lts

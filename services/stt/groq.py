@@ -1,6 +1,6 @@
 import os
 import io
-from pydub import AudioSegment
+import wave
 from fastapi import WebSocket
 from services.llm.openai_async import LargeLanguageModel
 from groq import Groq
@@ -59,30 +59,28 @@ class GroqTranscriber:
             self.audio_buffer = bytearray()
     
     def mulaw_to_wav(self, mulaw_data):
-        """Convert mu-law audio data to WAV format using pydub"""
-        try:
-            # Create AudioSegment from raw mu-law data
-            audio = AudioSegment(
-                data=mulaw_data,
-                sample_width=1,  # mu-law is 8-bit
-                frame_rate=8000,  # Twilio sample rate
-                channels=1       # mono
-            )
-            
-            # Convert to 16-bit PCM for better compatibility
-            audio = audio.set_sample_width(2)
-            
-            # Export to WAV format in memory
-            wav_buffer = io.BytesIO()
-            audio.export(wav_buffer, format="wav")
-            wav_buffer.seek(0)
-            
-            return wav_buffer.getvalue()
-            
-        except Exception as e:
-            print(f"Audio conversion error: {e}")
-            # Fallback: create a simple WAV header and use raw data
-            return self.create_simple_wav(mulaw_data)
+        """Convert mu-law audio data to WAV format"""
+        import audioop
+        
+        # Convert mu-law to linear PCM
+        pcm_data = audioop.ulaw2lin(mulaw_data, 2)
+        
+        # Create WAV file in memory
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(8000)  # 8kHz sample rate
+            wav_file.writeframes(pcm_data)
+        
+        wav_buffer.seek(0)
+        return wav_buffer.getvalue()
+    
+    async def force_transcribe(self):
+        """Force transcription of remaining buffer (called on stop)"""
+        if len(self.audio_buffer) > 0:
+            await self.transcribe_chunk()
+
     
     async def force_transcribe(self):
         """Force transcription of remaining buffer (called on stop)"""
