@@ -9,7 +9,6 @@ from fastapi.templating import Jinja2Templates
 from services.tts.tts_factory import TTSFactory
 from services.llm.openai_async import LargeLanguageModel
 from services.stt.deepgram import DeepgramTranscriber
-from services.stt.groq import GroqTranscriber
 
 app = FastAPI()
 
@@ -79,6 +78,7 @@ async def twilio_websocket(websocket: WebSocket):
     await websocket.accept()
     buffer = bytearray(b'')
     empty_byte_received = False
+    transcriber = None
 
     try:
         async for message in websocket.iter_text():
@@ -95,35 +95,39 @@ async def twilio_websocket(websocket: WebSocket):
                     openai_llm = LargeLanguageModel(text_to_speech)
                     openai_llm.init_chat()
 
-                    deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
-                    await deepgram_transcriber.deepgram_connect()
-
-                    # transcriber = GroqTranscriber(openai_llm, websocket, stream_sid)
+                    transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
+                    await transcriber.deepgram_connect()
 
                 case "connected":
                     print('Websocket connected')
 
                 case "media":
-                    # sending audio to deepgram websocket
-                    payload_b64 = data['media']['payload']
-                    payload_mulaw = base64.b64decode(payload_b64)
-                    buffer.extend(payload_mulaw)
+                    if transcriber and transcriber.is_connected:
+                        # Send audio to Deepgram
+                        payload_b64 = data['media']['payload']
+                        payload_mulaw = base64.b64decode(payload_b64)
+                        buffer.extend(payload_mulaw)
 
-                    if payload_mulaw == b'':
-                        empty_byte_received = True
+                        if payload_mulaw == b'':
+                            empty_byte_received = True
 
-                    if len(buffer) >= BUFFER_SIZE or empty_byte_received:
-                        await deepgram_transcriber.dg_connection.send(buffer)
-                        # await transcriber.process_audio(buffer)
-                        buffer = bytearray(b'')
+                        # Send buffer when it reaches the target size or when silence detected
+                        if len(buffer) >= BUFFER_SIZE or empty_byte_received:
+                            await transcriber.dg_connection.send(buffer)
+                            buffer = bytearray(b'')
+                            empty_byte_received = False
                 
                 case "stop":
-                    await deepgram_transcriber.deepgram_close()
-                    # await transcriber.force_transcribe()
+                    if transcriber:
+                        await transcriber.deepgram_close()
                     print("Stop message received")
 
     except Exception as e:
         print(f"Websocket error: {e}")
+    finally:
+        # Cleanup
+        if transcriber:
+            await transcriber.deepgram_close()
 
 
 if __name__ == "__main__":
