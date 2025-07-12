@@ -22,15 +22,33 @@ class DeepgramTranscriber:
         self.dg_connection = None
         self.deepgram_client = None
         self.is_connected = False
-        self.is_finals = []
         
+        # deepgram websocket options
+        self.options: LiveOptions = LiveOptions(
+            model="nova-3",
+            language="en-US",
+            # Apply smart formatting to the output
+            smart_format=True,
+            # Raw audio format details
+            encoding="mulaw",
+            channels=1,
+            sample_rate=8000,
+            # To get UtteranceEnd, the following must be set:
+            interim_results=True,
+            # Time in milliseconds of silence to wait for before finalizing speech
+            utterance_end_ms=2000,
+            punctuate=True
+        )
+
     async def deepgram_connect(self):
         """Initialize connection to Deepgram"""
         try:
             # Configure Deepgram client
             config = DeepgramClientOptions(
                 options={
-                    "keepalive": "true"}
+                    "keepalive": "true",
+                    "heartbeat": "5s"
+                }
             )
             
             self.deepgram_client = DeepgramClient("", config)
@@ -44,77 +62,47 @@ class DeepgramTranscriber:
             self.dg_connection.on(LiveTranscriptionEvents.Error, self._on_error)
             self.dg_connection.on(LiveTranscriptionEvents.Close, self._on_close)
             self.dg_connection.on(LiveTranscriptionEvents.Warning, self._on_warning)
-
-            # Deepgram configuration for Twilio audio
-            options = LiveOptions(
-                model="nova-3",                # Latest high-accuracy model
-                language="en-US",
-                encoding="mulaw",              # Twilio uses μ-law encoding
-                sample_rate=8000,             # Twilio sample rate
-                channels=1,                   # Mono audio
-                punctuate=True,
-                interim_results=True,
-                endpointing="300ms",          # Voice activity detection
-                smart_format=True,
-                profanity_filter=False,
-                redact=False,
-                diarize=False,               # Set to True if you want speaker detection
-                multichannel=False,
-            )
-
-            addons = {
-                "no_delay": "true"
-            }
-
-            # Start connection using the exact pattern from official example
-            if await self.dg_connection.start(options, addons=addons) is False:
-                print("❌ Failed to connect to Deepgram")
-                return False
             
-            print(f"✅ Successfully connected to Deepgram for stream {self.stream_sid}")
-            self.is_connected = True
-            return True
-            
+            # Start the connection
+            if await self.dg_connection.start(self.options):
+                print(f"🎤 Connected to Deepgram for stream {self.stream_sid}")
+                self.is_connected = True
+                
+                # Start keepalive task
+                asyncio.create_task(self._send_keepalive())
+            else:
+                print("❌ Failed to start Deepgram connection")
+                
         except Exception as e:
             print(f"❌ Error connecting to Deepgram: {e}")
-            print(f"❌ Error type: {type(e).__name__}")
-            return False
             
-
     async def _on_open(self, *args, **kwargs):
         """Called when Deepgram connection opens"""
         print("✅ Deepgram WebSocket opened")
         
-
-    async def _on_message(self, result, **kwargs):
-        """Handle transcription results - adapted from official example"""
+    async def _on_message(self, *args, **kwargs):
+        """Handle incoming transcription results"""
         try:
-            sentence = result.channel.alternatives[0].transcript
-            if len(sentence) == 0:
+            result = kwargs.get("result")
+            if not result:
                 return
                 
-            if result.is_final:
-                # Collect finals like in official example
-                self.is_finals.append(sentence)
+            # Extract transcript
+            if result.channel and result.channel.alternatives:
+                alternative = result.channel.alternatives[0]
+                transcript = alternative.transcript
                 
-                # Speech Final means we have detected sufficient silence
-                if result.speech_final:
-                    utterance = " ".join(self.is_finals)
-                    print(f"📝 [{self.stream_sid}] Speech Final: {utterance}")
+                if transcript:
+                    confidence = alternative.confidence if hasattr(alternative, 'confidence') else 0.0
+                    is_final = result.is_final
                     
-                    # Send complete utterance to LLM
-                    await self._process_final_transcript(utterance)
-                    self.is_finals = []
-                else:
-                    # These are useful for real-time captioning
-                    print(f"📝 [{self.stream_sid}] Is Final: {sentence}")
-            else:
-                # Interim results for real-time feedback
-                print(f"📝 [{self.stream_sid}] Interim: {sentence}")
-                
+                    print(f"📝 Transcript ({'FINAL' if is_final else 'interim'}): {transcript}")
+                    
+                    # Process the transcript
+                    await self._handle_transcript(transcript, is_final, confidence)
+                    
         except Exception as e:
-            print(f"❌ Error processing transcript: {e}")
-
+            print(f"❌ Error processing Deepgram message: {e}")
             
     async def _on_error(self, *args, **kwargs):
         """Handle Deepgram errors"""
