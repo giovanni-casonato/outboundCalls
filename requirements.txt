@@ -9,5 +9,4 @@ pybase64
 numpy
 elevenlabs
 scipy
-wave
-AudioSegment
+pydub
