@@ -65,6 +65,9 @@ class DeepgramTranscriber:
             self.dg_connection.on(LiveTranscriptionEvents.Close, self._on_close)
             self.dg_connection.on(LiveTranscriptionEvents.Warning, self._on_warning)
             
+            print(f"🌐 Connecting with options: {self.live_options}")
+            print(f"Deepgram API_KEY:", os.getenv('DEEPGRAM_API_KEY'))
+            
             # Start the connection
             if await self.dg_connection.start(self.live_options):
                 print(f"🎤 Connected to Deepgram for stream {self.stream_sid}")
