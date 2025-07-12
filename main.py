@@ -95,10 +95,10 @@ async def twilio_websocket(websocket: WebSocket):
                     openai_llm = LargeLanguageModel(text_to_speech)
                     openai_llm.init_chat()
 
-                    # deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
-                    # await deepgram_transcriber.deepgram_connect()
+                    deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
+                    await deepgram_transcriber.deepgram_connect()
 
-                    transcriber = GroqTranscriber(openai_llm, websocket, stream_sid)
+                    # transcriber = GroqTranscriber(openai_llm, websocket, stream_sid)
 
                 case "connected":
                     print('Websocket connected')
@@ -113,13 +113,13 @@ async def twilio_websocket(websocket: WebSocket):
                         empty_byte_received = True
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
-                        # await deepgram_transcriber.dg_connection.send(buffer)
-                        await transcriber.process_audio(buffer)
+                        await deepgram_transcriber.dg_connection.send(buffer)
+                        # await transcriber.process_audio(buffer)
                         buffer = bytearray(b'')
                 
                 case "stop":
-                    # await deepgram_transcriber.deepgram_close()
-                    await transcriber.force_transcribe()
+                    await deepgram_transcriber.deepgram_close()
+                    # await transcriber.force_transcribe()
                     print("Stop message received")
 
     except Exception as e:

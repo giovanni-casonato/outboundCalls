@@ -10,3 +10,4 @@ numpy
 elevenlabs
 scipy
 audioop-lts
+groq
