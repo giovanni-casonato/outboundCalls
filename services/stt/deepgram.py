@@ -86,7 +86,7 @@ class DeepgramTranscriber:
                 user_message_final = " ".join(transcripts)
                 print(f'\nUser: {user_message_final}')
 
-                await assistant.run_chat_completion(user_message_final)
+                await assistant.run_chat(user_message_final)
                 transcripts.clear()
     
         on_message_with_kwargs = partial(on_message, transcripts=self.transcripts, assistant=self.assistant, websocket=self.ws, stream_sid = self.stream_sid)

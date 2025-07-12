@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from services.tts.tts_factory import TTSFactory
 from services.llm.openai_async import LargeLanguageModel
 from services.stt.deepgram import DeepgramTranscriber
+from services.stt.groq import GroqTranscriber
 
 app = FastAPI()
 
@@ -94,8 +95,10 @@ async def twilio_websocket(websocket: WebSocket):
                     openai_llm = LargeLanguageModel(text_to_speech)
                     openai_llm.init_chat()
 
-                    deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
-                    await deepgram_transcriber.deepgram_connect()
+                    # deepgram_transcriber = DeepgramTranscriber(openai_llm, websocket, stream_sid)
+                    # await deepgram_transcriber.deepgram_connect()
+
+                    transcriber = GroqTranscriber(openai_llm, websocket, stream_sid)
 
                 case "connected":
                     print('Websocket connected')
@@ -105,14 +108,18 @@ async def twilio_websocket(websocket: WebSocket):
                     payload_b64 = data['media']['payload']
                     payload_mulaw = base64.b64decode(payload_b64)
                     buffer.extend(payload_mulaw)
+
                     if payload_mulaw == b'':
                         empty_byte_received = True
+
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
-                        await deepgram_transcriber.dg_connection.send(buffer)
+                        # await deepgram_transcriber.dg_connection.send(buffer)
+                        await transcriber.process_audio(buffer)
                         buffer = bytearray(b'')
                 
                 case "stop":
-                    await deepgram_transcriber.deepgram_close()
+                    # await deepgram_transcriber.deepgram_close()
+                    await transcriber.force_transcribe()
                     print("Stop message received")
 
     except Exception as e:
