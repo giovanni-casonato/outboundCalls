@@ -102,7 +102,7 @@ async def twilio_websocket(websocket: WebSocket):
                     print('Websocket connected')
 
                 case "media":
-                    if transcriber and transcriber.is_connected:
+                    if transcriber: #and transcriber.is_connected:
                         # Send audio to Deepgram
                         payload_b64 = data['media']['payload']
                         payload_mulaw = base64.b64decode(payload_b64)
