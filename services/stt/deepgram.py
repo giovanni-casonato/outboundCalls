@@ -47,7 +47,6 @@ class DeepgramTranscriber:
         try:
             # Configure Deepgram client
             config = DeepgramClientOptions(
-                api_key=os.getenv('DEEPGRAM_API_KEY'),  # Replace with your API key
                 options={
                     "keepalive": "true",
                     "heartbeat": "5s"
