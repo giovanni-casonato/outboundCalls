@@ -26,8 +26,8 @@ TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 # Twilio sends audio data as 160 byte messages containing 20ms of audio each
-# We buffer 5 twilio messages corresponding to 100 ms of audio
-BUFFER_SIZE = 5 * 160
+# We buffer 3 twilio messages corresponding to 60 ms of audio
+BUFFER_SIZE = 3 * 160
 TWILIO_SAMPLE_RATE = 8000
 
 @app.get("/")
