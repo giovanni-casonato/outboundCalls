@@ -22,25 +22,7 @@ class DeepgramTranscriber:
         self.dg_connection = None
         self.deepgram_client = None
         self.is_connected = False
-        
-        # Deepgram configuration for Twilio audio
-        self.live_options = LiveOptions(
-            model="nova-3",                # Latest high-accuracy model
-            language="en-US",
-            encoding="mulaw",              # Twilio uses μ-law encoding
-            sample_rate=8000,             # Twilio sample rate
-            channels=1,                   # Mono audio
-            punctuate=True,
-            interim_results=True,
-            endpointing="300ms",          # Voice activity detection
-            smart_format=True,
-            profanity_filter=False,
-            redact=False,
-            diarize=False,               # Set to True if you want speaker detection
-            multichannel=False,
-            alternatives=1,
-            tier="nova"                  # Use nova tier for best performance
-        )
+        self.is_finals = []
         
     async def deepgram_connect(self):
         """Initialize connection to Deepgram"""
@@ -48,9 +30,7 @@ class DeepgramTranscriber:
             # Configure Deepgram client
             config = DeepgramClientOptions(
                 options={
-                    "keepalive": "true",
-                    "heartbeat": "5s"
-                }
+                    "keepalive": "true"}
             )
             
             self.deepgram_client = DeepgramClient("", config)
@@ -64,50 +44,77 @@ class DeepgramTranscriber:
             self.dg_connection.on(LiveTranscriptionEvents.Error, self._on_error)
             self.dg_connection.on(LiveTranscriptionEvents.Close, self._on_close)
             self.dg_connection.on(LiveTranscriptionEvents.Warning, self._on_warning)
+
+            # Deepgram configuration for Twilio audio
+            options = LiveOptions(
+                model="nova-3",                # Latest high-accuracy model
+                language="en-US",
+                encoding="mulaw",              # Twilio uses μ-law encoding
+                sample_rate=8000,             # Twilio sample rate
+                channels=1,                   # Mono audio
+                punctuate=True,
+                interim_results=True,
+                endpointing="300ms",          # Voice activity detection
+                smart_format=True,
+                profanity_filter=False,
+                redact=False,
+                diarize=False,               # Set to True if you want speaker detection
+                multichannel=False,
+            )
+
+            addons = {
+                "no_delay": "true"
+            }
+
+            # Start connection using the exact pattern from official example
+            if await self.dg_connection.start(options, addons=addons) is False:
+                print("❌ Failed to connect to Deepgram")
+                return False
             
-            print(f"🌐 Connecting with options: {self.live_options}")
-            print(f"Deepgram API_KEY:", os.getenv('DEEPGRAM_API_KEY'))
+            print(f"✅ Successfully connected to Deepgram for stream {self.stream_sid}")
+            self.is_connected = True
+            return True
             
-            # Start the connection
-            if await self.dg_connection.start(self.live_options):
-                print(f"🎤 Connected to Deepgram for stream {self.stream_sid}")
-                self.is_connected = True
-                
-                # Start keepalive task
-                asyncio.create_task(self._send_keepalive())
-            else:
-                print("❌ Failed to start Deepgram connection")
-                
         except Exception as e:
             print(f"❌ Error connecting to Deepgram: {e}")
+            print(f"❌ Error type: {type(e).__name__}")
+            return False
             
+
     async def _on_open(self, *args, **kwargs):
         """Called when Deepgram connection opens"""
         print("✅ Deepgram WebSocket opened")
         
-    async def _on_message(self, *args, **kwargs):
-        """Handle incoming transcription results"""
+
+    async def _on_message(self, result, **kwargs):
+        """Handle transcription results - adapted from official example"""
         try:
-            result = kwargs.get("result")
-            if not result:
+            sentence = result.channel.alternatives[0].transcript
+            if len(sentence) == 0:
                 return
                 
-            # Extract transcript
-            if result.channel and result.channel.alternatives:
-                alternative = result.channel.alternatives[0]
-                transcript = alternative.transcript
+            if result.is_final:
+                # Collect finals like in official example
+                self.is_finals.append(sentence)
                 
-                if transcript:
-                    confidence = alternative.confidence if hasattr(alternative, 'confidence') else 0.0
-                    is_final = result.is_final
+                # Speech Final means we have detected sufficient silence
+                if result.speech_final:
+                    utterance = " ".join(self.is_finals)
+                    print(f"📝 [{self.stream_sid}] Speech Final: {utterance}")
                     
-                    print(f"📝 Transcript ({'FINAL' if is_final else 'interim'}): {transcript}")
-                    
-                    # Process the transcript
-                    await self._handle_transcript(transcript, is_final, confidence)
-                    
+                    # Send complete utterance to LLM
+                    await self._process_final_transcript(utterance)
+                    self.is_finals = []
+                else:
+                    # These are useful for real-time captioning
+                    print(f"📝 [{self.stream_sid}] Is Final: {sentence}")
+            else:
+                # Interim results for real-time feedback
+                print(f"📝 [{self.stream_sid}] Interim: {sentence}")
+                
         except Exception as e:
-            print(f"❌ Error processing Deepgram message: {e}")
+            print(f"❌ Error processing transcript: {e}")
+
             
     async def _on_error(self, *args, **kwargs):
         """Handle Deepgram errors"""
